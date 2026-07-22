@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Match Lab — football predictor</title>
+<style>
+  :root {
+    --pitch: #0f2f22;
+    --pitch-light: #1c4a34;
+    --chalk: #f4f1e9;
+    --amber: #f2b134;
+    --navy: #10141c;
+    --muted: #9fb3a8;
+    --danger: #e0645a;
+    --success: #6fbf8c;
+    --card: #16352654;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--navy);
+    color: var(--chalk);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    margin: 0;
+    padding: 2rem 1.5rem 4rem;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; }
+  h1 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 700;
+    font-size: 2.1rem;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+    color: var(--chalk);
+  }
+  .tagline { color: var(--muted); font-size: 14px; margin: 0 0 2rem; }
+  .card {
+    background: var(--pitch);
+    border: 1px solid var(--pitch-light);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+  input, select {
+    width: 100%;
+    background: var(--navy);
+    border: 1px solid var(--pitch-light);
+    color: var(--chalk);
+    border-radius: 6px;
+    padding: 9px 10px;
+    font-size: 14px;
+  }
+  button {
+    background: var(--amber);
+    color: #23180a;
+    border: none;
+    font-weight: 700;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { filter: brightness(1.08); }
+  button.secondary {
+    background: transparent;
+    color: var(--chalk);
+    border: 1px solid var(--pitch-light);
+    font-weight: 400;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .stat {
+    background: var(--navy);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .stat .value { font-size: 26px; font-weight: 700; color: var(--amber); }
+  .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin-top: 10px; }
+  .cell {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--navy);
+    font-weight: 600;
+  }
+  .msg { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .warn {
+    background: #3a2a10;
+    border: 1px solid #6b4d15;
+    color: #f2c96b;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .error { color: var(--danger); font-size: 13px; margin-top: 8px; }
+  .subtle { font-size: 13px; color: var(--muted); }
+  .value-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+  .badge-good { color: var(--success); font-weight: 600; }
+  .badge-bad { color: var(--danger); font-weight: 600; }
+  .badge-neutral { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Match Lab</h1>
+  <p class="tagline">A Poisson goal model, fed by live standings from football-data.org.</p>
+
+  <div class="card">
+    <label for="apiKey">Your football-data.org API key</label>
+    <input id="apiKey" type="password" placeholder="Paste your token here" autocomplete="off" />
+    <p class="msg">Kept only in this browser tab for this session — never saved or sent anywhere else.</p>
+
+    <div class="row" style="margin-top: 12px;">
+      <div>
+        <label for="compSel">Competition</label>
+        <select id="compSel">
+          <option value="PL">Premier League (England)</option>
+          <option value="PD">La Liga (Spain)</option>
+          <option value="BL1">Bundesliga (Germany)</option>
+          <option value="SA">Serie A (Italy)</option>
+          <option value="FL1">Ligue 1 (France)</option>
+          <option value="DED">Eredivisie (Netherlands)</option>
+          <option value="PPL">Primeira Liga (Portugal)</option>
+          <option value="ELC">Championship (England)</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button id="loadBtn" style="width:100%;">Load current standings</button>
+      </div>
+    </div>
+    <div id="loadMsg" class="msg"></div>
+  </div>
+
+  <div class="card" id="predictCard" style="display:none;">
+    <div class="row">
+      <div>
+        <label for="homeSel">Home team</label>
+        <select id="homeSel"></select>
+      </div>
+      <div>
+        <label for="awaySel">Away team</label>
+        <select id="awaySel"></select>
+      </div>
+    </div>
+
+    <div class="row3" style="margin-top: 1rem;">
+      <div class="stat"><div class="label">Home win</div><div class="value" id="pHome">--</div></div>
+      <div class="stat"><div class="label">Draw</div><div class="value" id="pDraw">--</div></div>
+      <div class="stat"><div class="label">Away win</div><div class="value" id="pAway">--</div></div>
+    </div>
+
+    <div class="row3" style="margin-top: 10px;">
+      <div class="stat"><div class="label">Over 2.5 goals</div><div class="value" style="font-size:18px;" id="pOver">--</div></div>
+      <div class="stat"><div class="label">Both to score</div><div class="value" style="font-size:18px;" id="pBtts">--</div></div>
+      <div class="stat"><div class="label">Likeliest score</div><div class="value" style="font-size:18px;" id="pTop">--</div></div>
+    </div>
+
+    <p class="subtle" style="margin-top:1.25rem; margin-bottom:4px;">Scoreline probability grid (home goals × away goals)</p>
+    <div class="grid6" id="scoreGrid"></div>
+
+    <div style="border-top:1px solid var(--pitch-light); margin-top:1.5rem; padding-top:1rem;">
+      <p class="subtle" style="margin-bottom:8px;">Optional — enter bookmaker decimal odds to check for value</p>
+      <div class="row3">
+        <input id="oddsHome" type="number" step="0.01" placeholder="Home e.g. 2.10" />
+        <input id="oddsDraw" type="number" step="0.01" placeholder="Draw e.g. 3.40" />
+        <input id="oddsAway" type="number" step="0.01" placeholder="Away e.g. 3.20" />
+      </div>
+      <div id="valueOut" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <div class="warn">
+    These numbers come from a simplified statistical model built on season-to-date goals scored and conceded. They are estimates, not certainties — no legitimate system predicts football outcomes at 95–98% accuracy. Bookmaker odds already price in far more information than this tool has access to. Use this as one input among many, track your results honestly, and never bet more than you can afford to lose.
+  </div>
+
+</div>
+
+<script>
+let teamStats = {};
+let leagueAvgFor = 1.35;
+let leagueAvgAgainst = 1.35;
+
+document.getElementById('loadBtn').addEventListener('click', loadStandings);
+
+async function loadStandings() {
+  const key = document.getElementById('apiKey').value.trim();
+  const comp = document.getElementById('compSel').value;
+  const msg = document.getElementById('loadMsg');
+  if (!key) {
+    msg.innerHTML = '<span class="error">Paste your API key above first.</span>';
+    return;
+  }
+  msg.textContent = 'Loading...';
+  document.getElementById('predictCard').style.display = 'none';
+
+  try {
+    const target = 'https://api.football-data.org/v4/competitions/' + comp + '/standings';
+    const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(target), {
+      headers: { 'X-Auth-Token': key }
+    });
+    if (!res.ok) {
+      if (res.status === 403) throw new Error('That key was rejected. Double check you copied it correctly, or that this competition is included in your plan.');
+      if (res.status === 429) throw new Error('Too many requests — the free tier is rate limited. Wait a minute and try again.');
+      throw new Error('Request failed (status ' + res.status + ').');
+    }
+    const data = await res.json();
+    const table = data.standings.find(s => s.type === 'TOTAL').table;
+
+    teamStats = {};
+    let totalFor = 0, totalAgainst = 0, totalPlayed = 0;
+    table.forEach(row => {
+      const played = row.playedGames || 1;
+      teamStats[row.team.name] = {
+        goalsFor: row.goalsFor,
+        goalsAgainst: row.goalsAgainst,
+        played: played
+      };
+      totalFor += row.goalsFor;
+      totalAgainst += row.goalsAgainst;
+      totalPlayed += played;
+    });
+    leagueAvgFor = totalFor / totalPlayed;
+    leagueAvgAgainst = totalAgainst / totalPlayed;
+
+    const homeSel = document.getElementById('homeSel');
+    const awaySel = document.getElementById('awaySel');
+    homeSel.innerHTML = '';
+    awaySel.innerHTML = '';
+    Object.keys(teamStats).forEach(name => {
+      const o1 = document.createElement('option'); o1.value = name; o1.textContent = name; homeSel.appendChild(o1);
+      const o2 = document.createElement('option'); o2.value = name; o2.textContent = name; awaySel.appendChild(o2);
+    });
+    if (awaySel.options.length > 1) awaySel.selectedIndex = 1;
+
+    msg.textContent = 'Loaded ' + table.length + ' teams from ' + data.competition.name + '.';
+    document.getElementById('predictCard').style.display = 'block';
+    run();
+  } catch (err) {
+    msg.innerHTML = '<span class="error">' + err.message + '</span>';
+  }
+}
+
+function poisson(k, lambda) {
+  let fact = 1;
+  for (let i = 2; i <= k; i++) fact *= i;
+  return Math.pow(lambda, k) * Math.exp(-lambda) / fact;
+}
+function fmtPct(x) { return (x * 100).toFixed(1) + '%'; }
+
+function run() {
+  const homeName = document.getElementById('homeSel').value;
+  const awayName = document.getElementById('awaySel').value;
+  const h = teamStats[homeName];
+  const a = teamStats[awayName];
+  if (!h || !a) return;
+
+  const HOME_ADV = 1.12;
+  const hAttack = (h.goalsFor / h.played) / leagueAvgFor;
+  const hDefense = (h.goalsAgainst / h.played) / leagueAvgAgainst;
+  const aAttack = (a.goalsFor / a.played) / leagueAvgFor;
+  const aDefense = (a.goalsAgainst / a.played) / leagueAvgAgainst;
+
+  const lambdaHome = leagueAvgFor * hAttack * aDefense * HOME_ADV;
+  const lambdaAway = leagueAvgFor * aAttack * hDefense;
+
+  const maxG = 6;
+  const grid = [];
+  let pHome = 0, pDraw = 0, pAway = 0, pOver = 0, pBtts = 0;
+  let best = { p: 0, hg: 0, ag: 0 };
+  for (let hg = 0; hg < maxG; hg++) {
+    grid[hg] = [];
+    for (let ag = 0; ag < maxG; ag++) {
+      const p = poisson(hg, lambdaHome) * poisson(ag, lambdaAway);
+      grid[hg][ag] = p;
+      if (hg > ag) pHome += p; else if (hg === ag) pDraw += p; else pAway += p;
+      if (hg + ag > 2.5) pOver += p;
+      if (hg > 0 && ag > 0) pBtts += p;
+      if (p > best.p) best = { p, hg, ag };
+    }
+  }
+
+  document.getElementById('pHome').textContent = fmtPct(pHome);
+  document.getElementById('pDraw').textContent = fmtPct(pDraw);
+  document.getElementById('pAway').textContent = fmtPct(pAway);
+  document.getElementById('pOver').textContent = fmtPct(pOver);
+  document.getElementById('pBtts').textContent = fmtPct(pBtts);
+  document.getElementById('pTop').textContent = best.hg + '–' + best.ag;
+
+  const maxP = Math.max(...grid.flat());
+  const gridEl = document.getElementById('scoreGrid');
+  gridEl.innerHTML = '';
+  for (let hg = 0; hg < maxG; hg++) {
+    for (let ag = 0; ag < maxG; ag++) {
+      const p = grid[hg][ag];
+      const t = p / maxP;
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      const r = Math.round(242 - t * 130);
+      const g = Math.round(241 - t * 110);
+      const b = Math.round(233 - t * 180);
+      cell.style.background = 'rgb(' + r + ',' + g + ',' + b + ')';
+      cell.textContent = hg + '-' + ag;
+      cell.title = hg + '-' + ag + ': ' + fmtPct(p);
+      gridEl.appendChild(cell);
+    }
+  }
+  updateValue(pHome, pDraw, pAway);
+}
+
+function updateValue(pHome, pDraw, pAway) {
+  const oh = parseFloat(document.getElementById('oddsHome').value);
+  const od = parseFloat(document.getElementById('oddsDraw').value);
+  const oa = parseFloat(document.getElementById('oddsAway').value);
+  const out = document.getElementById('valueOut');
+  out.innerHTML = '';
+  if (!(oh > 0 && od > 0 && oa > 0)) return;
+
+  const overround = 1/oh + 1/od + 1/oa;
+  const rows = [
+    { label: 'Home', odds: oh, model: pHome },
+    { label: 'Draw', odds: od, model: pDraw },
+    { label: 'Away', odds: oa, model: pAway }
+  ];
+  let html = '<p class="subtle" style="margin:0 0 6px;">Bookmaker overround: ' + ((overround - 1) * 100).toFixed(1) + '%</p>';
+  rows.forEach(r => {
+    const implied = (1 / r.odds) / overround;
+    const edge = r.model - implied;
+    const cls = edge > 0.03 ? 'badge-good' : (edge < -0.03 ? 'badge-bad' : 'badge-neutral');
+    const label = edge > 0.03 ? 'possible value' : (edge < -0.03 ? 'model disagrees' : 'close to fair');
+    html += '<div class="value-row"><span>' + r.label + '</span><span>model ' + fmtPct(r.model) + ' vs implied ' + fmtPct(implied) + ' — <span class="' + cls + '">' + label + '</span></span></div>';
+  });
+  out.innerHTML = html;
+}
+
+['homeSel','awaySel'].forEach(id => {
+  document.getElementById(id) && document.getElementById(id).addEventListener('change', run);
+});
+document.addEventListener('input', (e) => {
+  if (['oddsHome','oddsDraw','oddsAway'].includes(e.target.id)) run();
+});
+document.getElementById('predictCard').addEventListener('change', (e) => {
+  if (e.target.id === 'homeSel' || e.target.id === 'awaySel') run();
+});
+</script>
+</body>
+</html>
