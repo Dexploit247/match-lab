@@ -186,6 +186,9 @@
 let teamStats = {};
 let leagueAvgFor = 1.35;
 let leagueAvgAgainst = 1.35;
+let leagueAvgHomeFor = 1.45, leagueAvgHomeAgainst = 1.15;
+let leagueAvgAwayFor = 1.15, leagueAvgAwayAgainst = 1.45;
+let usingSplit = false;
 
 document.getElementById('loadBtn').addEventListener('click', loadStandings);
 
@@ -211,23 +214,44 @@ async function loadStandings() {
       throw new Error('Request failed (status ' + res.status + ').');
     }
     const data = await res.json();
-    const table = data.standings.find(s => s.type === 'TOTAL').table;
+    const totalTable = data.standings.find(s => s.type === 'TOTAL').table;
+    const homeTableRaw = data.standings.find(s => s.type === 'HOME');
+    const awayTableRaw = data.standings.find(s => s.type === 'AWAY');
+    usingSplit = !!(homeTableRaw && awayTableRaw);
 
     teamStats = {};
-    let totalFor = 0, totalAgainst = 0, totalPlayed = 0;
-    table.forEach(row => {
-      const played = row.playedGames || 1;
-      teamStats[row.team.name] = {
-        goalsFor: row.goalsFor,
-        goalsAgainst: row.goalsAgainst,
-        played: played
-      };
-      totalFor += row.goalsFor;
-      totalAgainst += row.goalsAgainst;
-      totalPlayed += played;
-    });
-    leagueAvgFor = totalFor / totalPlayed;
-    leagueAvgAgainst = totalAgainst / totalPlayed;
+    let hFor = 0, hAgainst = 0, hPlayed = 0;
+    let aFor = 0, aAgainst = 0, aPlayed = 0;
+
+    if (usingSplit) {
+      const homeMap = {}, awayMap = {};
+      homeTableRaw.table.forEach(r => { homeMap[r.team.name] = r; });
+      awayTableRaw.table.forEach(r => { awayMap[r.team.name] = r; });
+      totalTable.forEach(row => {
+        const name = row.team.name;
+        const hr = homeMap[name], ar = awayMap[name];
+        if (!hr || !ar) return;
+        teamStats[name] = {
+          home: { goalsFor: hr.goalsFor, goalsAgainst: hr.goalsAgainst, played: hr.playedGames || 1 },
+          away: { goalsFor: ar.goalsFor, goalsAgainst: ar.goalsAgainst, played: ar.playedGames || 1 }
+        };
+        hFor += hr.goalsFor; hAgainst += hr.goalsAgainst; hPlayed += (hr.playedGames || 1);
+        aFor += ar.goalsFor; aAgainst += ar.goalsAgainst; aPlayed += (ar.playedGames || 1);
+      });
+      leagueAvgHomeFor = hFor / hPlayed;
+      leagueAvgHomeAgainst = hAgainst / hPlayed;
+      leagueAvgAwayFor = aFor / aPlayed;
+      leagueAvgAwayAgainst = aAgainst / aPlayed;
+    } else {
+      let totalFor = 0, totalAgainst = 0, totalPlayed = 0;
+      totalTable.forEach(row => {
+        const played = row.playedGames || 1;
+        teamStats[row.team.name] = { goalsFor: row.goalsFor, goalsAgainst: row.goalsAgainst, played: played };
+        totalFor += row.goalsFor; totalAgainst += row.goalsAgainst; totalPlayed += played;
+      });
+      leagueAvgFor = totalFor / totalPlayed;
+      leagueAvgAgainst = totalAgainst / totalPlayed;
+    }
 
     const homeSel = document.getElementById('homeSel');
     const awaySel = document.getElementById('awaySel');
@@ -239,7 +263,8 @@ async function loadStandings() {
     });
     if (awaySel.options.length > 1) awaySel.selectedIndex = 1;
 
-    msg.textContent = 'Loaded ' + table.length + ' teams from ' + data.competition.name + '.';
+    msg.textContent = 'Loaded ' + totalTable.length + ' teams from ' + data.competition.name +
+      (usingSplit ? ' (using real home/away splits).' : ' (home/away splits unavailable — using season totals with a fixed home-advantage estimate).');
     document.getElementById('predictCard').style.display = 'block';
     run();
   } catch (err) {
@@ -261,14 +286,23 @@ function run() {
   const a = teamStats[awayName];
   if (!h || !a) return;
 
-  const HOME_ADV = 1.12;
-  const hAttack = (h.goalsFor / h.played) / leagueAvgFor;
-  const hDefense = (h.goalsAgainst / h.played) / leagueAvgAgainst;
-  const aAttack = (a.goalsFor / a.played) / leagueAvgFor;
-  const aDefense = (a.goalsAgainst / a.played) / leagueAvgAgainst;
-
-  const lambdaHome = leagueAvgFor * hAttack * aDefense * HOME_ADV;
-  const lambdaAway = leagueAvgFor * aAttack * hDefense;
+  let lambdaHome, lambdaAway;
+  if (usingSplit) {
+    const hAttackHome = (h.home.goalsFor / h.home.played) / leagueAvgHomeFor;
+    const aDefenseAway = (a.away.goalsAgainst / a.away.played) / leagueAvgAwayAgainst;
+    const aAttackAway = (a.away.goalsFor / a.away.played) / leagueAvgAwayFor;
+    const hDefenseHome = (h.home.goalsAgainst / h.home.played) / leagueAvgHomeAgainst;
+    lambdaHome = leagueAvgHomeFor * hAttackHome * aDefenseAway;
+    lambdaAway = leagueAvgAwayFor * aAttackAway * hDefenseHome;
+  } else {
+    const HOME_ADV = 1.12;
+    const hAttack = (h.goalsFor / h.played) / leagueAvgFor;
+    const hDefense = (h.goalsAgainst / h.played) / leagueAvgAgainst;
+    const aAttack = (a.goalsFor / a.played) / leagueAvgFor;
+    const aDefense = (a.goalsAgainst / a.played) / leagueAvgAgainst;
+    lambdaHome = leagueAvgFor * hAttack * aDefense * HOME_ADV;
+    lambdaAway = leagueAvgFor * aAttack * hDefense;
+  }
 
   const maxG = 6;
   const grid = [];
