@@ -236,9 +236,11 @@ async function loadStandings() {
       throw new Error('Request failed (status ' + res.status + ').');
     }
     const data = await res.json();
-    const totalTable = data.standings.find(s => s.type === 'TOTAL').table;
-    const homeTableRaw = data.standings.find(s => s.type === 'HOME');
-    const awayTableRaw = data.standings.find(s => s.type === 'AWAY');
+    const totalTable = data.standings.filter(s => s.type === 'TOTAL').flatMap(s => s.table);
+    const homeEntries = data.standings.filter(s => s.type === 'HOME');
+    const awayEntries = data.standings.filter(s => s.type === 'AWAY');
+    const homeTableRaw = homeEntries.length ? { table: homeEntries.flatMap(s => s.table) } : null;
+    const awayTableRaw = awayEntries.length ? { table: awayEntries.flatMap(s => s.table) } : null;
     usingSplit = !!(homeTableRaw && awayTableRaw);
 
     teamStats = {};
@@ -287,6 +289,8 @@ async function loadStandings() {
 
     msg.textContent = 'Loaded ' + totalTable.length + ' teams from ' + data.competition.name +
       (usingSplit ? ' (using real home/away splits).' : ' (home/away splits unavailable — using season totals with a fixed home-advantage estimate).');
+    const now = new Date();
+    msg.textContent += ' Pulled at ' + now.toLocaleString() + ' (your local time) — standings reflect completed matches only, not live/in-progress games.';
     document.getElementById('predictCard').style.display = 'block';
     run();
   } catch (err) {
