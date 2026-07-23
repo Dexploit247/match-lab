@@ -115,7 +115,10 @@
   <div class="card">
     <label for="apiKey">Your football-data.org API key</label>
     <input id="apiKey" type="password" placeholder="Paste your token here" autocomplete="off" />
-    <p class="msg">Kept only in this browser tab for this session — never saved or sent anywhere else.</p>
+    <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:13px; color:var(--muted);">
+      <input type="checkbox" id="rememberKey" style="width:auto;" /> Remember my key on this device only
+    </label>
+    <p class="msg">This tool is public — each visitor pastes in their own free key. It's only ever stored in your own browser, never in the page's code, and never sent anywhere except football-data.org.</p>
 
     <div class="row" style="margin-top: 12px;">
       <div>
@@ -192,6 +195,22 @@ let usingSplit = false;
 
 document.getElementById('loadBtn').addEventListener('click', loadStandings);
 
+(function initRememberedKey() {
+  try {
+    const saved = localStorage.getItem('matchlab_api_key');
+    if (saved) {
+      document.getElementById('apiKey').value = saved;
+      document.getElementById('rememberKey').checked = true;
+    }
+  } catch (e) { /* localStorage unavailable, ignore */ }
+})();
+
+document.getElementById('rememberKey').addEventListener('change', (e) => {
+  try {
+    if (!e.target.checked) localStorage.removeItem('matchlab_api_key');
+  } catch (err) { /* ignore */ }
+});
+
 async function loadStandings() {
   const key = document.getElementById('apiKey').value.trim();
   const comp = document.getElementById('compSel').value;
@@ -204,6 +223,9 @@ async function loadStandings() {
   document.getElementById('predictCard').style.display = 'none';
 
   try {
+    if (document.getElementById('rememberKey').checked) {
+      localStorage.setItem('matchlab_api_key', key);
+    }
     const target = 'https://api.football-data.org/v4/competitions/' + comp + '/standings';
     const res = await fetch('https://corsproxy.io/?url=' + encodeURIComponent(target), {
       headers: { 'X-Auth-Token': key }
